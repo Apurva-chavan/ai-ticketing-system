@@ -411,14 +411,35 @@ def get_analytics():
         "avg_resolution_by_dept": [{"department": r[0], "avg_hours": round(r[1], 1)} for r in avg_rows],
         "severity_breakdown":     [{"severity": r[0], "count": r[1]} for r in sev_rows],
     }
+
 # Serve React frontend
-frontend_build = pathlib.Path(__file__).parent.parent / "frontend" / "build"
-if frontend_build.exists():
+BASE_DIR = pathlib.Path(__file__).resolve().parent
+frontend_build = BASE_DIR.parent / "frontend" / "build"
+
+@app.get("/")
+def serve_root():
+    index = frontend_build / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return {"status": "API running - frontend build not found"}
+
+@app.get("/{full_path:path}")
+def serve_frontend(full_path: str):
+    # Don't intercept API routes
+    if full_path.startswith("api/"):
+        raise HTTPException(404, "Not found")
+    file_path = frontend_build / full_path
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(str(file_path))
+    index = frontend_build / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return {"status": "frontend not found"}
+
+# Mount static files if build exists
+if (frontend_build / "static").exists():
     app.mount("/static", StaticFiles(directory=str(frontend_build / "static")), name="static")
-    
-    @app.get("/{full_path:path}")
-    def serve_frontend(full_path: str):
-        return FileResponse(str(frontend_build / "index.html"))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
